@@ -24,10 +24,10 @@ services:
     depends_on:
       db:
         condition: service_healthy
+    env_file:
+      - .env
     environment:
       DATABASE_URL: postgresql+asyncpg://${POSTGRES_USER:-istqb}:${POSTGRES_PASSWORD}@db:5432/${POSTGRES_DB:-istqb_quiz}
-      OPENAI_API_KEY: ${OPENAI_API_KEY}
-      ENCRYPTION_SECRET: ${ENCRYPTION_SECRET}
     ports:
       - "8000:8000"
 

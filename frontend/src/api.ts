@@ -1,13 +1,67 @@
 const BASE = import.meta.env.DEV ? 'http://localhost:8000/api' : '/api';
 
+// ── Auth helpers ──────────────────────────────────────────────────────────────
+
+function getToken(): string | null {
+  return localStorage.getItem('istqb_jwt');
+}
+
+function authHeaders(extra: Record<string, string> = {}): Record<string, string> {
+  const token = getToken();
+  return token
+    ? { Authorization: `Bearer ${token}`, ...extra }
+    : { ...extra };
+}
+
+async function apiFetch(input: string, init: RequestInit = {}): Promise<Response> {
+  const res = await fetch(input, {
+    ...init,
+    headers: { ...authHeaders(), ...(init.headers as Record<string, string> || {}) },
+  });
+  if (res.status === 401) {
+    localStorage.removeItem('istqb_jwt');
+    window.location.href = '/';
+  }
+  return res;
+}
+
+// Auth API
+export async function apiLogin(username: string, password: string): Promise<{ totp_required: boolean; setup_required: boolean }> {
+  const res = await fetch(`${BASE}/auth/login`, {
+    method: 'POST',
+    headers: { 'Content-Type': 'application/json' },
+    body: JSON.stringify({ username, password }),
+  });
+  if (!res.ok) throw new Error(await res.text());
+  return res.json();
+}
+
+export async function apiGetTotpSetup(): Promise<{ qr_code_base64: string; secret: string }> {
+  const res = await fetch(`${BASE}/auth/totp/setup`);
+  if (!res.ok) throw new Error(await res.text());
+  return res.json();
+}
+
+export async function apiVerifyTotp(code: string): Promise<{ access_token: string }> {
+  const res = await fetch(`${BASE}/auth/totp/verify`, {
+    method: 'POST',
+    headers: { 'Content-Type': 'application/json' },
+    body: JSON.stringify({ code }),
+  });
+  if (!res.ok) throw new Error(await res.text());
+  return res.json();
+}
+
+// ── Quiz API ──────────────────────────────────────────────────────────────────
+
 export async function generateQuiz(): Promise<QuizGenerateResponse> {
-  const res = await fetch(`${BASE}/quiz/generate`, { method: 'POST' });
+  const res = await apiFetch(`${BASE}/quiz/generate`, { method: 'POST' });
   if (!res.ok) throw new Error(await res.text());
   return res.json();
 }
 
 export async function submitQuiz(payload: QuizSubmitPayload): Promise<QuizSubmitResponse> {
-  const res = await fetch(`${BASE}/quiz/submit`, {
+  const res = await apiFetch(`${BASE}/quiz/submit`, {
     method: 'POST',
     headers: { 'Content-Type': 'application/json' },
     body: JSON.stringify(payload),
@@ -17,7 +71,7 @@ export async function submitQuiz(payload: QuizSubmitPayload): Promise<QuizSubmit
 }
 
 export async function generateWeakQuiz(count: number, categories: string[] = []): Promise<QuizGenerateResponse> {
-  const res = await fetch(`${BASE}/quiz/weak`, {
+  const res = await apiFetch(`${BASE}/quiz/weak`, {
     method: 'POST',
     headers: { 'Content-Type': 'application/json' },
     body: JSON.stringify({ count, categories }),
@@ -27,25 +81,25 @@ export async function generateWeakQuiz(count: number, categories: string[] = [])
 }
 
 export async function getWeakness(): Promise<WeaknessResponse> {
-  const res = await fetch(`${BASE}/quiz/weakness`);
+  const res = await apiFetch(`${BASE}/quiz/weakness`);
   if (!res.ok) throw new Error(await res.text());
   return res.json();
 }
 
 export async function getBankStats(): Promise<BankStats> {
-  const res = await fetch(`${BASE}/quiz/bank/stats`);
+  const res = await apiFetch(`${BASE}/quiz/bank/stats`);
   if (!res.ok) throw new Error(await res.text());
   return res.json();
 }
 
 export async function expandBank(batchSize: number = 25): Promise<{ added: number; bank: BankStats }> {
-  const res = await fetch(`${BASE}/quiz/bank/expand?batch_size=${batchSize}`, { method: 'POST' });
+  const res = await apiFetch(`${BASE}/quiz/bank/expand?batch_size=${batchSize}`, { method: 'POST' });
   if (!res.ok) throw new Error(await res.text());
   return res.json();
 }
 
 export async function getHistory(): Promise<HistoryResponse> {
-  const res = await fetch(`${BASE}/history`);
+  const res = await apiFetch(`${BASE}/history`);
   if (!res.ok) throw new Error(await res.text());
   return res.json();
 }
@@ -64,7 +118,7 @@ export async function getBankQuestions(
   if (search) params.set('search', search);
   if (category) params.set('category', category);
   if (contentType) params.set('content_type', contentType);
-  const res = await fetch(`${BASE}/quiz/bank/questions?${params}`);
+  const res = await apiFetch(`${BASE}/quiz/bank/questions?${params}`);
   if (!res.ok) throw new Error(await res.text());
   return res.json();
 }
@@ -72,13 +126,13 @@ export async function getBankQuestions(
 // --- Settings API ---
 
 export async function getSettings(): Promise<AppSettings> {
-  const res = await fetch(`${BASE}/settings/`);
+  const res = await apiFetch(`${BASE}/settings/`);
   if (!res.ok) throw new Error(await res.text());
   return res.json();
 }
 
 export async function updateModel(model: string): Promise<void> {
-  const res = await fetch(`${BASE}/settings/model`, {
+  const res = await apiFetch(`${BASE}/settings/model`, {
     method: 'PUT',
     headers: { 'Content-Type': 'application/json' },
     body: JSON.stringify({ model }),
@@ -87,7 +141,7 @@ export async function updateModel(model: string): Promise<void> {
 }
 
 export async function updateDiagramModel(model: string): Promise<void> {
-  const res = await fetch(`${BASE}/settings/diagram-model`, {
+  const res = await apiFetch(`${BASE}/settings/diagram-model`, {
     method: 'PUT',
     headers: { 'Content-Type': 'application/json' },
     body: JSON.stringify({ model }),
@@ -96,7 +150,7 @@ export async function updateDiagramModel(model: string): Promise<void> {
 }
 
 export async function upsertApiKey(key: string, label: string = 'default'): Promise<void> {
-  const res = await fetch(`${BASE}/settings/api-key`, {
+  const res = await apiFetch(`${BASE}/settings/api-key`, {
     method: 'PUT',
     headers: { 'Content-Type': 'application/json' },
     body: JSON.stringify({ key, label }),
@@ -105,7 +159,7 @@ export async function upsertApiKey(key: string, label: string = 'default'): Prom
 }
 
 export async function deleteApiKey(label: string): Promise<void> {
-  const res = await fetch(`${BASE}/settings/api-key/${encodeURIComponent(label)}`, {
+  const res = await apiFetch(`${BASE}/settings/api-key/${encodeURIComponent(label)}`, {
     method: 'DELETE',
   });
   if (!res.ok) throw new Error(await res.text());
@@ -229,3 +283,4 @@ export interface AppSettings {
   api_keys: ApiKeyEntry[];
   available_models: ModelOption[];
 }
+

@@ -10,6 +10,13 @@ class Settings(BaseSettings):
     quiz_size: int = 40
     pass_mark: int = 65
 
+    # Auth
+    admin_username: str = "admin"
+    admin_password_hash: str  # bcrypt hash; generate with: python -c "from passlib.hash import bcrypt; print(bcrypt.hash('yourpassword'))"
+    app_secret_key: str  # random secret for JWT signing; generate with: openssl rand -hex 32
+    jwt_algorithm: str = "HS256"
+    jwt_expire_minutes: int = 60 * 8  # 8 hours
+
     model_config = {"env_file": ".env"}
 
 

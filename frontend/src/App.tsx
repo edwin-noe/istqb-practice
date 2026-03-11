@@ -4,13 +4,16 @@ import Quiz from './components/Quiz';
 import Results from './components/Results';
 import QuestionBank from './components/QuestionBank';
 import Settings from './components/Settings';
+import Login from './components/Login';
 import { generateQuiz, generateWeakQuiz } from './api';
 import type { QuestionOut, QuizSubmitResponse } from './api';
+import { useAuth } from './context/AuthContext';
 import './styles/app.css';
 
 type Screen = 'home' | 'loading' | 'quiz' | 'results' | 'bank' | 'settings';
 
 function App() {
+  const { isLoggedIn, logout } = useAuth();
   const [screen, setScreen] = useState<Screen>('home');
   const [sessionId, setSessionId] = useState('');
   const [questions, setQuestions] = useState<QuestionOut[]>([]);
@@ -59,6 +62,10 @@ function App() {
     );
   }
 
+  if (!isLoggedIn) {
+    return <Login onSuccess={() => setScreen('home')} />;
+  }
+
   if (screen === 'quiz') {
     return (
       <Quiz
@@ -82,7 +89,12 @@ function App() {
     return <Results result={result} onHome={() => setScreen('home')} />;
   }
 
-  return <Home onStartQuiz={startQuiz} onStartWeakQuiz={startWeakQuiz} onBrowseBank={() => setScreen('bank')} onSettings={() => setScreen('settings')} />;
+  return (
+    <>
+      <button className="logout-btn" onClick={logout} title="Sign out">⎋ Sign out</button>
+      <Home onStartQuiz={startQuiz} onStartWeakQuiz={startWeakQuiz} onBrowseBank={() => setScreen('bank')} onSettings={() => setScreen('settings')} />
+    </>
+  );
 }
 
 export default App;

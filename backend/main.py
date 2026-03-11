@@ -1,9 +1,9 @@
-from fastapi import FastAPI
+from fastapi import FastAPI, Depends
 from fastapi.middleware.cors import CORSMiddleware
 from contextlib import asynccontextmanager
 from database import engine, async_session
 from models import Base
-from routers import quiz, history, settings
+from routers import quiz, history, settings, auth
 
 
 @asynccontextmanager
@@ -53,9 +53,10 @@ app.add_middleware(
     allow_headers=["*"],
 )
 
-app.include_router(quiz.router, prefix="/api/quiz", tags=["quiz"])
-app.include_router(history.router, prefix="/api", tags=["history"])
-app.include_router(settings.router, prefix="/api/settings", tags=["settings"])
+app.include_router(auth.router, prefix="/api/auth", tags=["auth"])
+app.include_router(quiz.router, prefix="/api/quiz", tags=["quiz"], dependencies=[Depends(auth.require_auth)])
+app.include_router(history.router, prefix="/api", tags=["history"], dependencies=[Depends(auth.require_auth)])
+app.include_router(settings.router, prefix="/api/settings", tags=["settings"], dependencies=[Depends(auth.require_auth)])
 
 
 @app.get("/api/health")
