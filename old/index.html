@@ -1,0 +1,135 @@
+<!DOCTYPE html>
+<html lang="en">
+<head>
+  <meta charset="UTF-8">
+  <meta name="viewport" content="width=device-width, initial-scale=1.0">
+  <title>ISTQB CTFL v4.0 Quiz</title>
+  <link rel="stylesheet" href="styles.css">
+</head>
+<body>
+  <div id="app">
+    <!-- HOME SCREEN -->
+    <div id="screen-home" class="screen active">
+      <div class="hero">
+        <h1>🎯 ISTQB CTFL v4.0</h1>
+        <p class="subtitle">Foundation Level Practice Quiz</p>
+        <p class="question-count"></p>
+      </div>
+      <div class="card home-actions">
+        <button class="btn btn-primary btn-lg" onclick="startNewQuiz()">
+          ▶ Start New Quiz (40 Questions)
+        </button>
+        <button class="btn btn-warning btn-lg" id="btn-weak-area" style="display:none" onclick="startWeakAreaQuiz()">
+          🎯 Practice Weak Areas
+        </button>
+        <div id="weak-area-stats" class="weak-stats" style="display:none"></div>
+        <button class="btn btn-secondary btn-lg" onclick="showHistory()">
+          📊 View Attempt History
+        </button>
+      </div>
+    </div>
+
+    <!-- QUIZ SCREEN -->
+    <div id="screen-quiz" class="screen">
+      <div class="quiz-header">
+        <div class="quiz-progress">
+          <span id="quiz-progress-text">Question 1 of 40</span>
+          <div class="progress-bar">
+            <div id="quiz-progress-fill" class="progress-fill"></div>
+          </div>
+        </div>
+        <div class="quiz-timer" id="quiz-timer">00:00</div>
+      </div>
+      <div class="card question-card">
+        <div class="question-number" id="question-number"></div>
+        <div class="question-text" id="question-text"></div>
+        <div class="options" id="options-container"></div>
+        <div class="question-nav">
+          <button class="btn btn-ghost" id="btn-prev" onclick="prevQuestion()">← Previous</button>
+          <div class="question-dots" id="question-dots"></div>
+          <button class="btn btn-ghost" id="btn-next" onclick="nextQuestion()">Next →</button>
+        </div>
+      </div>
+      <div class="quiz-footer">
+        <button class="btn btn-danger" onclick="confirmSubmit()">Submit Quiz</button>
+        <span id="answered-count">0 / 40 answered</span>
+      </div>
+    </div>
+
+    <!-- RESULTS SCREEN -->
+    <div id="screen-results" class="screen">
+      <div class="card results-card">
+        <h2 id="results-title">Quiz Complete!</h2>
+        <div class="score-circle" id="score-circle">
+          <span class="score-value" id="score-value">0%</span>
+          <span class="score-label">Score</span>
+        </div>
+        <div class="score-details">
+          <div class="detail"><span class="detail-label">Correct</span><span class="detail-value correct" id="correct-count">0</span></div>
+          <div class="detail"><span class="detail-label">Incorrect</span><span class="detail-value incorrect" id="incorrect-count">0</span></div>
+          <div class="detail"><span class="detail-label">Unanswered</span><span class="detail-value unanswered" id="unanswered-count">0</span></div>
+          <div class="detail"><span class="detail-label">Time</span><span class="detail-value" id="time-taken">00:00</span></div>
+        </div>
+        <div class="result-status" id="result-status"></div>
+      </div>
+
+      <div class="card">
+        <h3>Review Answers</h3>
+        <div class="review-filter">
+          <button class="btn btn-sm filter-active" data-filter="all" onclick="filterReview('all')">All</button>
+          <button class="btn btn-sm" data-filter="incorrect" onclick="filterReview('incorrect')">❌ Incorrect</button>
+          <button class="btn btn-sm" data-filter="correct" onclick="filterReview('correct')">✅ Correct</button>
+          <button class="btn btn-sm" data-filter="unanswered" onclick="filterReview('unanswered')">⬜ Unanswered</button>
+        </div>
+        <div id="review-container"></div>
+      </div>
+
+      <div class="card retake-options">
+        <h3>What's next?</h3>
+        <button class="btn btn-primary" onclick="retakeSameQuiz()">🔄 Retake Same Quiz (Shuffled)</button>
+        <button class="btn btn-secondary" onclick="studyMistakes()">📖 Study From Mistakes</button>
+        <button class="btn btn-secondary" onclick="startNewQuiz()">🆕 New Random Quiz</button>
+        <button class="btn btn-ghost" onclick="showHome()">🏠 Home</button>
+      </div>
+    </div>
+
+    <!-- STUDY MISTAKES SCREEN -->
+    <div id="screen-study" class="screen">
+      <div class="card">
+        <h2>📖 Study From Mistakes</h2>
+        <p id="study-info"></p>
+        <div id="study-count-selector">
+          <label>How many questions to review?</label>
+          <div class="count-options" id="count-options"></div>
+        </div>
+        <button class="btn btn-primary" id="btn-start-study" onclick="startStudySession()">Start Review</button>
+        <button class="btn btn-ghost" onclick="showResults()">← Back to Results</button>
+      </div>
+    </div>
+
+    <!-- HISTORY SCREEN -->
+    <div id="screen-history" class="screen">
+      <div class="card">
+        <h2>📊 Attempt History</h2>
+        <div id="history-container"></div>
+        <button class="btn btn-ghost" onclick="showHome()">← Back to Home</button>
+      </div>
+    </div>
+
+    <!-- CONFIRM MODAL -->
+    <div id="modal-overlay" class="modal-overlay" onclick="closeModal()">
+      <div class="modal" onclick="event.stopPropagation()">
+        <h3 id="modal-title">Submit Quiz?</h3>
+        <p id="modal-message"></p>
+        <div class="modal-actions">
+          <button class="btn btn-ghost" onclick="closeModal()">Cancel</button>
+          <button class="btn btn-primary" id="modal-confirm" onclick="submitQuiz()">Submit</button>
+        </div>
+      </div>
+    </div>
+  </div>
+
+  <script src="questions.js"></script>
+  <script src="app.js"></script>
+</body>
+</html>

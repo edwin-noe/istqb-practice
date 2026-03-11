@@ -1,0 +1,45 @@
+services:
+  db:
+    image: postgres:16-alpine
+    container_name: istqb-postgres
+    restart: unless-stopped
+    environment:
+      POSTGRES_USER: istqb
+      POSTGRES_PASSWORD: REDACTED_DB_PASSWORD
+      POSTGRES_DB: istqb_quiz
+    volumes:
+      - pgdata:/var/lib/postgresql/data
+    ports:
+      - "5432:5432"
+    healthcheck:
+      test: ["CMD-SHELL", "pg_isready -U istqb -d istqb_quiz"]
+      interval: 5s
+      timeout: 3s
+      retries: 5
+
+  backend:
+    build: ./backend
+    container_name: istqb-backend
+    restart: unless-stopped
+    depends_on:
+      db:
+        condition: service_healthy
+    environment:
+      DATABASE_URL: postgresql+asyncpg://istqb:REDACTED_DB_PASSWORD@db:5432/istqb_quiz
+      OPENAI_API_KEY: ${OPENAI_API_KEY}
+      ENCRYPTION_SECRET: ${ENCRYPTION_SECRET:-istqb-quiz-secret-key-2026}
+    ports:
+      - "8000:8000"
+
+  frontend:
+    build: ./frontend
+    container_name: istqb-frontend
+    restart: unless-stopped
+    depends_on:
+      backend:
+        condition: service_started
+    ports:
+      - "3000:80"
+
+volumes:
+  pgdata:
