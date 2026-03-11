@@ -1,4 +1,4 @@
-import { useState, type FormEvent } from 'react';
+import { useState, useRef, useEffect, type FormEvent, type KeyboardEvent } from 'react';
 import { apiLogin, apiGetTotpSetup, apiVerifyTotp } from '../api';
 import { useAuth } from '../context/AuthContext';
 
@@ -13,11 +13,16 @@ export default function Login({ onSuccess }: Props) {
   const [step, setStep] = useState<Step>('password');
   const [username, setUsername] = useState('');
   const [password, setPassword] = useState('');
-  const [totpCode, setTotpCode] = useState('');
+  const [digits, setDigits] = useState(['', '', '', '', '', '']);
   const [qrCode, setQrCode] = useState('');
   const [secret, setSecret] = useState('');
   const [error, setError] = useState('');
   const [loading, setLoading] = useState(false);
+  const digitRefs = useRef<(HTMLInputElement | null)[]>([]);
+
+  useEffect(() => {
+    if (step === 'totp') digitRefs.current[0]?.focus();
+  }, [step]);
 
   async function handleLogin(e: FormEvent) {
     e.preventDefault();
@@ -40,127 +45,185 @@ export default function Login({ onSuccess }: Props) {
     }
   }
 
-  async function handleTotp(e: FormEvent) {
-    e.preventDefault();
+  async function submitTotp(code: string) {
     setError('');
     setLoading(true);
     try {
-      const res = await apiVerifyTotp(totpCode);
+      const res = await apiVerifyTotp(code);
       setToken(res.access_token);
       onSuccess();
     } catch {
-      setError('Invalid or expired code. Try again.');
-      setTotpCode('');
+      setError('Incorrect code. Try again.');
+      setDigits(['', '', '', '', '', '']);
+      setTimeout(() => digitRefs.current[0]?.focus(), 50);
     } finally {
       setLoading(false);
     }
   }
 
-  function handleSetupContinue() {
-    setStep('totp');
+  function handleDigitChange(idx: number, val: string) {
+    const char = val.replace(/\D/g, '').slice(-1);
+    const next = digits.map((d, i) => (i === idx ? char : d));
+    setDigits(next);
+    if (char && idx < 5) digitRefs.current[idx + 1]?.focus();
+    if (next.every(d => d)) submitTotp(next.join(''));
   }
 
+  function handleDigitKey(idx: number, e: KeyboardEvent<HTMLInputElement>) {
+    if (e.key === 'Backspace' && !digits[idx] && idx > 0) {
+      digitRefs.current[idx - 1]?.focus();
+    }
+    if (e.key === 'ArrowLeft' && idx > 0) digitRefs.current[idx - 1]?.focus();
+    if (e.key === 'ArrowRight' && idx < 5) digitRefs.current[idx + 1]?.focus();
+  }
+
+  function handleDigitPaste(e: React.ClipboardEvent) {
+    const text = e.clipboardData.getData('text').replace(/\D/g, '').slice(0, 6);
+    if (text.length === 6) {
+      e.preventDefault();
+      const next = text.split('');
+      setDigits(next);
+      digitRefs.current[5]?.focus();
+      submitTotp(text);
+    }
+  }
+
+  const pageTitle =
+    step === 'password' ? 'Sign In' :
+    step === 'setup'    ? 'Set Up Two‑Factor Auth' :
+                          'Enter Verification Code';
+
+  const pageSubtitle =
+    step === 'password' ? 'ISTQB CTFL v4.0 Practice' :
+    step === 'setup'    ? 'Scan with Microsoft Authenticator' :
+                          'Open Microsoft Authenticator for your code';
+
   return (
-    <div className="login-wrapper">
-      <div className="login-card">
-        <div className="login-logo">
-          <span className="login-logo-icon">📋</span>
-          <h1>ISTQB Quiz</h1>
-          <p>CTFL v4.0 Practice</p>
+    <div className="auth-page">
+      <div className="auth-card">
+        {/* Header */}
+        <div className="auth-header">
+          <div className="auth-app-icon">
+            <svg width="28" height="28" viewBox="0 0 28 28" fill="none">
+              <rect width="28" height="28" rx="8" fill="#007AFF"/>
+              <path d="M8 20L10.5 13L14 18L17.5 10L20 20" stroke="white" strokeWidth="2" strokeLinecap="round" strokeLinejoin="round"/>
+            </svg>
+          </div>
+          <h1 className="auth-title">{pageTitle}</h1>
+          <p className="auth-subtitle">{pageSubtitle}</p>
         </div>
 
+        {/* Step: Password */}
         {step === 'password' && (
-          <form className="login-form" onSubmit={handleLogin}>
-            <h2>Sign In</h2>
-            <div className="form-group">
-              <label>Username</label>
-              <input
-                type="text"
-                value={username}
-                onChange={e => setUsername(e.target.value)}
-                placeholder="Enter username"
-                autoFocus
-                required
-              />
+          <form onSubmit={handleLogin}>
+            <div className="auth-field-group">
+              <div className="auth-field auth-field--first">
+                <label>Username</label>
+                <input
+                  type="text"
+                  value={username}
+                  onChange={e => setUsername(e.target.value)}
+                  placeholder="admin"
+                  autoFocus
+                  autoComplete="username"
+                  required
+                />
+              </div>
+              <div className="auth-field auth-field--last">
+                <label>Password</label>
+                <input
+                  type="password"
+                  value={password}
+                  onChange={e => setPassword(e.target.value)}
+                  placeholder="••••••••"
+                  autoComplete="current-password"
+                  required
+                />
+              </div>
             </div>
-            <div className="form-group">
-              <label>Password</label>
-              <input
-                type="password"
-                value={password}
-                onChange={e => setPassword(e.target.value)}
-                placeholder="Enter password"
-                required
-              />
-            </div>
-            {error && <div className="auth-error">{error}</div>}
-            <button type="submit" className="btn-primary login-btn" disabled={loading}>
-              {loading ? 'Signing in…' : 'Continue →'}
+
+            {error && <p className="auth-error">{error}</p>}
+
+            <button type="submit" className="auth-btn-primary" disabled={loading}>
+              {loading
+                ? <span className="auth-spinner" />
+                : 'Continue'}
             </button>
           </form>
         )}
 
+        {/* Step: QR Setup */}
         {step === 'setup' && (
-          <div className="totp-setup">
-            <h2>Set Up Authenticator</h2>
-            <p className="totp-instructions">
-              Scan this QR code with <strong>Microsoft Authenticator</strong>:
-            </p>
-            <ol className="setup-steps">
-              <li>Open Microsoft Authenticator on your phone</li>
-              <li>Tap <strong>+</strong> → <strong>Other account</strong></li>
-              <li>Scan the QR code below</li>
-            </ol>
-            <div className="qr-container">
+          <div>
+            <div className="auth-steps">
+              {[
+                ['1', 'Open Microsoft Authenticator'],
+                ['2', 'Tap + → Other account'],
+                ['3', 'Scan the QR code below'],
+              ].map(([n, text]) => (
+                <div className="auth-step" key={n}>
+                  <span className="auth-step-num">{n}</span>
+                  <span>{text}</span>
+                </div>
+              ))}
+            </div>
+
+            <div className="auth-qr-wrap">
               <img
                 src={`data:image/png;base64,${qrCode}`}
-                alt="TOTP QR Code"
-                className="qr-code"
+                alt="Authenticator QR Code"
+                className="auth-qr"
               />
             </div>
-            <details className="manual-entry">
-              <summary>Can't scan? Enter manually</summary>
-              <code className="totp-secret">{secret}</code>
+
+            <details className="auth-manual">
+              <summary>Can't scan? Use setup key</summary>
+              <code>{secret}</code>
             </details>
-            <button className="btn-primary login-btn" onClick={handleSetupContinue}>
-              I've scanned the code →
+
+            <button className="auth-btn-primary" onClick={() => setStep('totp')}>
+              I've scanned the code
             </button>
           </div>
         )}
 
+        {/* Step: TOTP digits */}
         {step === 'totp' && (
-          <form className="login-form" onSubmit={handleTotp}>
-            <h2>Two-Factor Auth</h2>
-            <p className="totp-instructions">
-              Enter the 6-digit code from <strong>Microsoft Authenticator</strong>
-            </p>
-            <div className="form-group">
-              <label>Authenticator Code</label>
-              <input
-                type="text"
-                inputMode="numeric"
-                pattern="\d{6}"
-                maxLength={6}
-                value={totpCode}
-                onChange={e => setTotpCode(e.target.value.replace(/\D/g, ''))}
-                placeholder="000000"
-                className="totp-input"
-                autoFocus
-                required
-              />
+          <div>
+            <div className="auth-digits" onPaste={handleDigitPaste}>
+              {digits.map((d, i) => (
+                <input
+                  key={i}
+                  ref={el => { digitRefs.current[i] = el; }}
+                  type="text"
+                  inputMode="numeric"
+                  maxLength={1}
+                  value={d}
+                  onChange={e => handleDigitChange(i, e.target.value)}
+                  onKeyDown={e => handleDigitKey(i, e)}
+                  className={`auth-digit${d ? ' auth-digit--filled' : ''}`}
+                  autoComplete="one-time-code"
+                />
+              ))}
             </div>
-            {error && <div className="auth-error">{error}</div>}
-            <button type="submit" className="btn-primary login-btn" disabled={loading || totpCode.length !== 6}>
-              {loading ? 'Verifying…' : 'Verify & Sign In'}
-            </button>
+
+            {error && <p className="auth-error">{error}</p>}
+
+            {loading && (
+              <div className="auth-verifying">
+                <span className="auth-spinner" />
+                <span>Verifying…</span>
+              </div>
+            )}
+
             <button
               type="button"
-              className="btn-link"
-              onClick={() => { setStep('password'); setError(''); setTotpCode(''); }}
+              className="auth-back"
+              onClick={() => { setStep('password'); setError(''); setDigits(['','','','','','']); }}
             >
-              ← Back
+              ← Use a different account
             </button>
-          </form>
+          </div>
         )}
       </div>
     </div>
