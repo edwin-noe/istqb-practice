@@ -3,6 +3,7 @@ from fastapi.middleware.cors import CORSMiddleware
 from contextlib import asynccontextmanager
 from database import engine, async_session
 from models import Base
+from config import Settings
 from routers import quiz, history, settings, auth
 
 
@@ -40,15 +41,25 @@ async def lifespan(app: FastAPI):
                     ))
                 await db.commit()
                 print(f"Auto-seeded {len(questions)} questions into bank")
+    # Seed admin user into DB if none exists
+    from services.user_service import ensure_admin_exists
+    async with async_session() as db:
+        await ensure_admin_exists(db)
     yield
     await engine.dispose()
 
 
 app = FastAPI(title="ISTQB Quiz API", version="1.0.0", lifespan=lifespan)
 
+_settings = Settings()
+_cors_origins = (
+    ["*"] if _settings.cors_origins.strip() == "*"
+    else [o.strip() for o in _settings.cors_origins.split(",") if o.strip()]
+)
 app.add_middleware(
     CORSMiddleware,
-    allow_origins=["http://localhost:5173", "http://127.0.0.1:5173"],
+    allow_origins=_cors_origins,
+    allow_credentials=True,
     allow_methods=["*"],
     allow_headers=["*"],
 )

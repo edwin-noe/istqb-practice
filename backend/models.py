@@ -11,6 +11,25 @@ class Base(DeclarativeBase):
     pass
 
 
+class User(Base):
+    """Single admin user. Username stored AES-256 encrypted, password bcrypt hashed."""
+    __tablename__ = "users"
+
+    id: Mapped[int] = mapped_column(Integer, primary_key=True, autoincrement=True)
+    username_encrypted: Mapped[str] = mapped_column(Text, nullable=False, unique=True)
+    # SHA-256 of the plaintext username — used for fast lookup without decrypting all rows
+    username_lookup_hash: Mapped[str] = mapped_column(String(64), nullable=False, unique=True)
+    password_hash: Mapped[str] = mapped_column(Text, nullable=False)
+    created_at: Mapped[datetime] = mapped_column(
+        DateTime(timezone=True), default=lambda: datetime.now(timezone.utc)
+    )
+    updated_at: Mapped[datetime] = mapped_column(
+        DateTime(timezone=True),
+        default=lambda: datetime.now(timezone.utc),
+        onupdate=lambda: datetime.now(timezone.utc),
+    )
+
+
 class SeedQuestion(Base):
     __tablename__ = "seed_questions"
 

@@ -10,9 +10,8 @@ Flow:
 
 import base64
 import io
-import json
+import os
 from datetime import datetime, timedelta, timezone
-from pathlib import Path
 
 import pyotp
 import qrcode
@@ -21,28 +20,35 @@ from fastapi.security import HTTPAuthorizationCredentials, HTTPBearer
 from jose import JWTError, jwt
 from pydantic import BaseModel
 from sqlalchemy.ext.asyncio import AsyncSession
+from sqlalchemy import select
 
 from config import Settings, get_settings
 from database import get_db
-from services.user_service import get_user_by_username, verify_password, get_decrypted_username
+from models import AppSetting
+from services.user_service import get_user_by_username, verify_password
 
 router = APIRouter()
 bearer_scheme = HTTPBearer(auto_error=False)
 
-TOTP_SECRET_FILE = Path(__file__).parent.parent / "data" / "totp_secret.json"
+_TOTP_KEY = "totp_secret"
 
 
 # ── Helpers ───────────────────────────────────────────────────────────────────
 
-def _load_totp_secret() -> str | None:
-    if TOTP_SECRET_FILE.exists():
-        return json.loads(TOTP_SECRET_FILE.read_text()).get("secret")
-    return None
+async def _load_totp_secret(db: AsyncSession) -> str | None:
+    result = await db.execute(select(AppSetting).where(AppSetting.key == _TOTP_KEY))
+    row = result.scalar_one_or_none()
+    return row.value if row else None
 
 
-def _save_totp_secret(secret: str) -> None:
-    TOTP_SECRET_FILE.parent.mkdir(parents=True, exist_ok=True)
-    TOTP_SECRET_FILE.write_text(json.dumps({"secret": secret}))
+async def _save_totp_secret(db: AsyncSession, secret: str) -> None:
+    result = await db.execute(select(AppSetting).where(AppSetting.key == _TOTP_KEY))
+    row = result.scalar_one_or_none()
+    if row:
+        row.value = secret
+    else:
+        db.add(AppSetting(key=_TOTP_KEY, value=secret, is_encrypted=False))
+    await db.commit()
 
 
 def _create_jwt(username: str, settings: Settings) -> str:
@@ -114,19 +120,20 @@ async def login(
     if not user or not verify_password(body.password, user.password_hash):
         raise HTTPException(status_code=status.HTTP_401_UNAUTHORIZED, detail="Invalid credentials")
 
-    secret = _load_totp_secret()
+    secret = await _load_totp_secret(db)
     return LoginResponse(totp_required=True, setup_required=(secret is None))
 
 
 @router.get("/totp/setup", response_model=TotpSetupResponse)
 async def totp_setup(
+    db: AsyncSession = Depends(get_db),
     settings: Settings = Depends(get_settings),
 ):
     """Generate (or return existing) TOTP secret and QR code for Microsoft Authenticator."""
-    secret = _load_totp_secret()
+    secret = await _load_totp_secret(db)
     if secret is None:
         secret = pyotp.random_base32()
-        _save_totp_secret(secret)
+        await _save_totp_secret(db, secret)
 
     totp = pyotp.TOTP(secret)
     uri = totp.provisioning_uri(name="ISTQB Quiz", issuer_name="ISTQB Quiz App")
@@ -146,7 +153,7 @@ async def totp_verify(
     settings: Settings = Depends(get_settings),
 ):
     """Step 2: verify 6-digit TOTP code → issue JWT."""
-    secret = _load_totp_secret()
+    secret = await _load_totp_secret(db)
     if not secret:
         raise HTTPException(status_code=status.HTTP_400_BAD_REQUEST, detail="TOTP not set up yet")
 
@@ -154,9 +161,6 @@ async def totp_verify(
     if not totp.verify(body.code.strip(), valid_window=1):
         raise HTTPException(status_code=status.HTTP_401_UNAUTHORIZED, detail="Invalid or expired code")
 
-    # Get the actual username from DB to embed in JWT
-    # We use a generic admin lookup since TOTP is global (single-user app)
-    import os
     username = os.getenv("ADMIN_USERNAME", "admin")
     token = _create_jwt(username, settings)
     return TokenResponse(access_token=token)
